@@ -1,0 +1,44 @@
+use embedded_graphics::mono_font::ascii::FONT_4X6;
+use esp_hal::gpio::GpioPin;
+use esp_hal::peripherals::I2C0;
+use esp_hal::time::Rate;
+use panic_rtt_target as _;
+
+use embedded_graphics::mono_font::MonoTextStyleBuilder;
+use embedded_graphics::{
+    pixelcolor::BinaryColor,
+    prelude::*,
+    text::{Baseline, Text},
+};
+use esp_hal::i2c::master::{Config, I2c};
+use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
+
+use crate::{BUTTON_PRESS, DISPLAY_VALUE};
+
+#[embassy_executor::task]
+pub async fn display(sda: GpioPin<21>, scl: GpioPin<22>, i2c: I2C0) {
+    let i2c = I2c::new(i2c, Config::default().with_frequency(Rate::from_khz(400)))
+        .unwrap()
+        .with_sda(sda)
+        .with_scl(scl);
+
+    let interface = I2CDisplayInterface::new(i2c);
+    let mut display = Ssd1306::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
+        .into_buffered_graphics_mode();
+    display.init().unwrap();
+
+    let text_style = MonoTextStyleBuilder::new()
+        .font(&FONT_4X6)
+        .text_color(BinaryColor::On)
+        .build();
+
+    loop {
+        BUTTON_PRESS.receive().await;
+        let s = DISPLAY_VALUE.receive().await;
+        display.clear(BinaryColor::Off).unwrap();
+        Text::with_baseline(&s, Point::new(0, 0), text_style, Baseline::Top)
+            .draw(&mut display)
+            .unwrap();
+        display.flush().unwrap();
+    }
+}
