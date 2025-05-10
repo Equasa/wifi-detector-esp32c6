@@ -2,10 +2,12 @@
 #![no_main]
 
 use alloc::string::String;
+use controller::handle_addresses;
 use defmt::info;
 use esp_hal::clock::CpuClock;
 use esp_hal::timer::systimer::SystemTimer;
 use esp_hal::timer::timg::TimerGroup;
+use esp_wifi::wifi::PromiscuousPkt;
 use panic_rtt_target as _;
 
 use embassy_executor::Spawner;
@@ -15,12 +17,19 @@ use embassy_sync::channel::Channel;
 extern crate alloc;
 
 mod button;
+mod controller;
 mod display;
 mod wifi;
 
-static DISPLAY_VALUE: Channel<CriticalSectionRawMutex, String, 1> = Channel::new();
+static DISPLAY_VALUE: Channel<CriticalSectionRawMutex, (String,u8), 1> = Channel::new();
+
+static MAC_ADRESSES: Channel<CriticalSectionRawMutex, (String, String), 1> = Channel::new();
 
 static BUTTON_PRESS: Channel<CriticalSectionRawMutex, u8, 1> = Channel::new();
+
+static PKT_SENDER: Channel<CriticalSectionRawMutex, (String, String), 10> = Channel::new();
+
+static SSID_MAC: Channel<CriticalSectionRawMutex, (String, String), 1> = Channel::new();
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
@@ -60,6 +69,10 @@ async fn main(spawner: Spawner) {
     let button_pin = peripherals.GPIO20;
 
     spawner.spawn(button::button(button_pin)).unwrap();
+
+    spawner.spawn(controller::handle_addresses()).unwrap();
+
+    spawner.spawn(controller::handle_name()).unwrap();
 
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.0.0-beta.0/examples/src/bin
 }
