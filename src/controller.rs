@@ -2,9 +2,20 @@ use alloc::string::String;
 
 use alloc::string::ToString;
 use alloc::vec::Vec;
+// use critical_section::Mutex;
 use defmt::info;
 
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::blocking_mutex::Mutex as BlockingMutex;
+
+use embassy_time::{Duration, Timer};
+
+
 use hashbrown::HashMap;
+
+use embassy_sync::lazy_lock::LazyLock;
+
+use core::cell::RefCell;
 
 use crate::DISPLAY_VALUE;
 use crate::PKT_SENDER;
@@ -12,184 +23,98 @@ use crate::SSID_MAC;
 
 const HASHMAP_SIZE: usize = 200;
 
-// #[embassy_executor::task]
-// pub async fn handle_addresses() {
-//     let mut num_connections: HashMap<[u8; 6], u8> = HashMap::with_capacity(HASHMAP_SIZE);
-//     let mut connections: HashMap<[u8; 6], [u8; 6]> = HashMap::with_capacity(HASHMAP_SIZE);
+static NUM_CONNECTIONS: LazyLock<
+    BlockingMutex<CriticalSectionRawMutex, RefCell<HashMap<[u8; 6], u8>>>,
+> = LazyLock::new(|| BlockingMutex::new(RefCell::new(HashMap::with_capacity(HASHMAP_SIZE))));
 
-//     loop {
-//         let (src, dst) = PKT_SENDER.receive().await;
+static CONNECTIONS: LazyLock<
+    BlockingMutex<CriticalSectionRawMutex, RefCell<HashMap<[u8; 6], [u8; 6]>>>,
+> = LazyLock::new(|| BlockingMutex::new(RefCell::new(HashMap::with_capacity(HASHMAP_SIZE))));
 
-//         if let Some(old_dst) = connections.get(&src).cloned() {
-//             if let Some(cnt) = num_connections.get_mut(&old_dst) {
-//                 *cnt = cnt.saturating_sub(1);
-//             }
-//         }
-//         connections.insert(src.clone(), dst.clone());
-
-//         let count = num_connections.entry(dst.clone()).or_insert(0);
-//         *count += 1;
-//         info!(
-//             "count = {}",
-//             *num_connections
-//                 .entry([140, 89, 115, 248, 225, 24])
-//                 .or_default()
-//         );
-//         let _ = DISPLAY_VALUE.try_send((
-//             String::from("Lord Voldemodem"),
-//             *num_connections
-//                 .entry([140, 89, 115, 248, 225, 24])
-//                 .or_default(),
-//         ));
-//     }
-// }
-
-// #[embassy_executor::task]
-// pub async fn handle_name() {
-//     let mut bssid_to_ssid: HashMap<[u8; 6], String> = HashMap::with_capacity(HASHMAP_SIZE);
-
-//     loop {
-//         let (ssid, bssid) = SSID_MAC.receive().await;
-//         bssid_to_ssid.entry(bssid.clone()).or_insert(ssid.clone());
-//         info!(
-//             "BSSID: {}, SSID: {} ",
-//             parse_bssid(&bssid).as_str(),
-//             ssid.as_str()
-//         )
-//     }
-// }
-
-// #[embassy_executor::task]
-// pub async fn handle_data() {
-//     let mut num_connections: HashMap<[u8; 6], u8> = HashMap::with_capacity(HASHMAP_SIZE);
-//     let mut connections: HashMap<[u8; 6], [u8; 6]> = HashMap::with_capacity(HASHMAP_SIZE);
-//     let mut bssid_to_ssid: HashMap<[u8; 6], String> = HashMap::with_capacity(HASHMAP_SIZE);
-
-//     let mut current_con = 0;
-
-//     loop {
-//         let mut iterator = num_connections.iter();
-//         for x in 0..current_con-1 {
-//             iterator.next();
-//         }
-//         let (bssid, count) = num_connections.iter().next().unwrap();
-
-//         let (ssid, bssid) = SSID_MAC.receive().await;
-//         bssid_to_ssid.entry(bssid.clone()).or_insert(ssid.clone());
-//         info!(
-//             "BSSID: {}, SSID: {} ",
-//             parse_bssid(&bssid).as_str(),
-//             ssid.as_str()
-//         );
-//         let mut i: u8 = 0;
-
-//         while i < 16 {
-//             let (src, dst) = PKT_SENDER.receive().await;
-
-//             if let Some(old_dst) = connections.get(&src).cloned() {
-//                 if let Some(cnt) = num_connections.get_mut(&old_dst) {
-//                     *cnt = cnt.saturating_sub(1);
-//                 }
-//             }
-//             connections.insert(src.clone(), dst.clone());
-
-//             let count = num_connections.entry(dst.clone()).or_insert(0);
-//             *count += 1;
-//             info!(
-//                 "count = {}",
-//                 *num_connections
-//                     .entry([140, 89, 115, 248, 225, 24])
-//                     .or_default()
-//             );
-//             let _ = DISPLAY_VALUE.try_send((
-//                 String::from("Lord Voldemodem"),
-//                 *num_connections
-//                     .entry([140, 89, 115, 248, 225, 24])
-//                     .or_default(),
-//             ));
-//             i+=1;
-//         }
-
-//         let ssid: String = bssid_to_ssid
-//             .get(&bssid)
-//             .cloned()
-//             .unwrap_or_else(|| parse_bssid(&bssid));
-
-//         let _ = DISPLAY_VALUE.try_send((ssid, *count));
-//         current_con+=1;
-//     }
-// }
+static BSSID_TO_SSID: LazyLock<
+    BlockingMutex<CriticalSectionRawMutex, RefCell<HashMap<[u8; 6], String>>>,
+> = LazyLock::new(|| BlockingMutex::new(RefCell::new(HashMap::with_capacity(HASHMAP_SIZE))));
 
 #[embassy_executor::task]
-pub async fn handle_data() {
-    let mut num_connections: HashMap<[u8; 6], u8> = HashMap::with_capacity(HASHMAP_SIZE);
-    let mut connections: HashMap<[u8; 6], [u8; 6]> = HashMap::with_capacity(HASHMAP_SIZE);
-    let mut bssid_to_ssid: HashMap<[u8; 6], String> = HashMap::with_capacity(HASHMAP_SIZE);
-
-    let mut current_con = 0;
-
-    num_connections.insert([0, 0, 0, 0, 0, 0], 0);
-
-    for _ in 0..40 {
-        let (ssid_frame, frame_bssid) = SSID_MAC.receive().await;
-        bssid_to_ssid
-            .entry(frame_bssid.clone())
-            .or_insert(ssid_frame.clone());
-        info!(
-            "BSSID: {}, SSID: {}",
-            parse_bssid(&frame_bssid).as_str(),
-            ssid_frame.as_str()
-        );
-    }
+pub async fn handle_addresses() {
+    let num_lock = NUM_CONNECTIONS.get();
+    let conn_lock = CONNECTIONS.get();
 
     loop {
-        let (display_bssid, display_count): ([u8; 6], u8) = {
-            let mut iterator = num_connections.iter();
-            for x in 0..current_con - 1 {
-                iterator.next();
-            }
+        let (src, dst) = PKT_SENDER.receive().await;
 
-            let (key, &val) = iterator
-                .next()
-                .expect("num_connections should have at least one entry");
-            (*key, val)
-        }; 
+        num_lock.lock(|num_cell| {
+            let mut num_connections = num_cell.borrow_mut();
 
-        let (ssid_frame, frame_bssid) = SSID_MAC.receive().await;
-        bssid_to_ssid
-            .entry(frame_bssid.clone())
-            .or_insert(ssid_frame.clone());
-        info!(
-            "BSSID: {}, SSID: {}",
-            parse_bssid(&frame_bssid).as_str(),
-            ssid_frame.as_str()
-        );
+            conn_lock.lock(|connections_cell| {
+                let mut connections = connections_cell.borrow_mut();
 
-        let mut i: u8 = 0;
-        while i < 16 {
-            let (src, dst) = PKT_SENDER.receive().await;
-
-            if let Some(old_dst) = connections.get(&src).cloned() {
-                if let Some(cnt) = num_connections.get_mut(&old_dst) {
-                    *cnt = cnt.saturating_sub(1);
+                if let Some(old_dst) = connections.get(&src).cloned() {
+                    if let Some(cnt) = num_connections.get_mut(&old_dst) {
+                        *cnt = cnt.saturating_sub(1);
+                    }
                 }
-            }
-            connections.insert(src.clone(), dst.clone());
+                connections.insert(src.clone(), dst.clone());
 
-            let cnt = num_connections.entry(dst.clone()).or_insert(0);
-            *cnt += 1;
-
-            i += 1;
-        }
-
-        let display_bssid_str: String = bssid_to_ssid
-            .get(&display_bssid) // Option<&String>
-            .cloned() // Option<String>
-            .unwrap_or_else(|| parse_bssid(&display_bssid));
-        let _ = DISPLAY_VALUE.try_send((display_bssid_str.to_string(), display_count));
-        current_con += 1;
+                let count = num_connections.entry(dst.clone()).or_insert(0);
+                *count += 1;
+            });
+        });
     }
 }
+
+#[embassy_executor::task]
+pub async fn handle_name() {
+    let bssid_to_ssid_lock = BSSID_TO_SSID.get();
+
+    loop {
+        let (ssid, bssid) = SSID_MAC.receive().await;
+        bssid_to_ssid_lock.lock(|bssid_to_ssid_cell| {
+            let mut bssid_to_ssid = bssid_to_ssid_cell.borrow_mut();
+
+            bssid_to_ssid.entry(bssid.clone()).or_insert(ssid.clone());
+            // info!(
+            //     "BSSID: {}, SSID: {} ",
+            //     parse_bssid(&bssid).as_str(),
+            //     ssid.as_str()
+            // )
+        });
+        Timer::after(Duration::from_millis(200)).await;
+
+    }
+}
+
+#[embassy_executor::task]
+pub async fn ssid_count_pairer() {
+    let num_lock = NUM_CONNECTIONS.get();
+    let bssid_to_ssid_lock = BSSID_TO_SSID.get();
+
+    loop {
+        let mut snapshot = Vec::new();
+        num_lock.lock(|num_cell| {
+            bssid_to_ssid_lock.lock(|bssid_to_ssid_lock_cell| {
+                let bssid_to_ssid = bssid_to_ssid_lock_cell.borrow();
+                for (&bssid, &count) in num_cell.borrow().iter() {
+
+                    let ssid = bssid_to_ssid.get(&bssid);
+                    if ssid != None {
+                        snapshot.push((bssid_to_ssid.get(&bssid).cloned(), count));
+                    }
+                }
+
+            });
+
+            for (ssid, count) in snapshot {
+                //info!("{}, {}", ssid.unwrap().as_str(),count);
+                let _ = DISPLAY_VALUE.try_send((ssid.clone().unwrap().to_string(), count));
+            }
+
+        });
+
+        Timer::after(Duration::from_millis(200)).await;
+    }
+}
+
 
 fn parse_bssid(data: &[u8]) -> String {
     let address1: Vec<String> = data.iter().map(|&x| x.to_string()).collect();

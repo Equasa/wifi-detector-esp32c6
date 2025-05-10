@@ -33,7 +33,7 @@ pub async fn display(sda: GPIO21<'static>, scl: GPIO22<'static>, i2c: I2C0<'stat
         .text_color(BinaryColor::On)
         .build();
 
-    let WAITING_MESSAGE = MonoTextStyleBuilder::new()
+    let waiting_message = MonoTextStyleBuilder::new()
         .font(&FONT_6X13)
         .text_color(BinaryColor::On)
         .build();
@@ -41,7 +41,7 @@ pub async fn display(sda: GPIO21<'static>, scl: GPIO22<'static>, i2c: I2C0<'stat
     Text::with_baseline(
         "No networks found yet",
         Point::new(0, 0),
-        WAITING_MESSAGE,
+        waiting_message,
         Baseline::Top,
     )
     .draw(&mut display)
@@ -49,7 +49,7 @@ pub async fn display(sda: GPIO21<'static>, scl: GPIO22<'static>, i2c: I2C0<'stat
     display.flush().unwrap();
 
     loop {
-        BUTTON_PRESS.receive().await;
+        // BUTTON_PRESS.receive().await;
         let (name, count) = DISPLAY_VALUE.receive().await;
 
         display.clear(BinaryColor::Off).unwrap();
