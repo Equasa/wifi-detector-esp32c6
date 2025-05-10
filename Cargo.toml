@@ -52,6 +52,7 @@ cfg-if = "1.0.0"
 embassy-sync = { version = "0.6.2", features = ["defmt"] }
 hashbrown = { version = "0.15.3", features = ["alloc"] }
 ieee80211 = { version = "0.5.5", features = ["defmt"] }
+embassy-futures = { version = "0.1.1", features = ["defmt"] }
 
 [profile.dev]
 # Rust debug is too slow.

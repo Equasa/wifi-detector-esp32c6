@@ -1,7 +1,3 @@
-use alloc::string::ParseError;
-use alloc::string::String;
-use alloc::vec::Vec;
-use defmt::info;
 use embassy_executor::Spawner;
 use embassy_net::{Runner, StackResources};
 
@@ -16,13 +12,11 @@ use esp_wifi::wifi::Sniffer;
 use esp_wifi::wifi::WifiController;
 use esp_wifi::{init, wifi::WifiDevice, EspWifiController};
 
-use alloc::string::ToString;
-
 use crate::PKT_SENDER;
 use crate::SSID_MAC;
 
 const VEC_SIZE: usize = 16;
-const BROADCAST_MAC: &[u8] = &[255,255,255,255,255,255];
+const BROADCAST_MAC: &[u8] = &[255, 255, 255, 255, 255, 255];
 
 macro_rules! mk_static {
     ($t:ty,$val:expr) => {{
@@ -57,7 +51,6 @@ pub async fn wifi(
 
     let seed = (rng.random() as u64) << 32 | rng.random() as u64;
 
-    // Init network stack
     let (_stack, runner) = embassy_net::new(
         wifi_interface,
         config,
@@ -65,7 +58,7 @@ pub async fn wifi(
         seed,
     );
     controller
-        .set_mode(esp_wifi::wifi::WifiMode::ApSta)
+        .set_mode(esp_wifi::wifi::WifiMode::Sta)
         .unwrap();
 
     spawner.spawn(net_task(runner)).ok();
@@ -75,8 +68,6 @@ pub async fn wifi(
         .await
         .expect("failed to start WiFi driver");
 
-    info!("got here");
-
     spawner.spawn(scan_loop(controller)).unwrap();
     spawner.spawn(sniffer_loop(sniffer)).unwrap();
 }
@@ -85,19 +76,19 @@ pub async fn wifi(
 async fn scan_loop(mut controller: WifiController<'static>) {
     loop {
         let results = controller.scan_n(VEC_SIZE).unwrap();
-        info!("Found {} networks", results.len());
 
         for item in &results {
-            SSID_MAC
-                .send((item.ssid.clone(), item.bssid))
-                .await;
+            SSID_MAC.send((item.ssid.clone(), item.bssid)).await;
         }
         Timer2::after(Duration::from_millis(4_000)).await;
     }
 }
 
-fn parse_wifi_packet(data: &[u8]) -> ([u8;6], [u8;6]){
-    return (data[4..10].try_into().expect(""), data[10..16].try_into().expect(""));
+fn parse_wifi_packet(data: &[u8]) -> ([u8; 6], [u8; 6]) {
+    return (
+        data[4..10].try_into().expect(""),
+        data[10..16].try_into().expect(""),
+    );
 }
 
 #[embassy_executor::task]
@@ -105,7 +96,6 @@ async fn sniffer_loop(mut sniffer: Sniffer) {
     sniffer.set_promiscuous_mode(true).unwrap();
 
     sniffer.set_receive_cb(|pkt| {
-
         let (adr1, adr2) = parse_wifi_packet(pkt.data);
 
         if !adr1.eq(BROADCAST_MAC) {
