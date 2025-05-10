@@ -25,13 +25,12 @@ static BUTTON_PRESS: Channel<CriticalSectionRawMutex, u8, 1> = Channel::new();
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
     // generator version: 0.3.1
+    esp_alloc::heap_allocator!(size: 100 * 1024);
 
     rtt_target::rtt_init_defmt!();
 
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
-
-    esp_alloc::heap_allocator!(size: 72 * 1024);
 
     let timer0 = SystemTimer::new(peripherals.SYSTIMER);
     esp_hal_embassy::init(timer0.alarm0);

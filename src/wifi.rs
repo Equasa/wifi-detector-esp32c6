@@ -1,4 +1,7 @@
-use alloc::format;
+
+use alloc::string::ParseError;
+use alloc::string::String;
+use alloc::vec::Vec;
 use defmt::info;
 use embassy_executor::Spawner;
 use embassy_net::{Runner, StackResources};
@@ -9,18 +12,15 @@ use esp_hal::{
     rng::Rng,
     timer::timg::Timer,
 };
-use esp_wifi::wifi::Interfaces;
+use esp_wifi::wifi::Sniffer;
 use esp_wifi::wifi::WifiController;
-use esp_wifi::{
-    init,
-    wifi::WifiDevice,
-    EspWifiController,
-};
+use esp_wifi::{init, wifi::WifiDevice, EspWifiController};
+
+use alloc::string::ToString;
+
 
 use hashbrown::HashMap;
-use heapless::String;
 
-//for display
 
 use crate::DISPLAY_VALUE;
 
@@ -37,7 +37,13 @@ macro_rules! mk_static {
 }
 
 #[embassy_executor::task]
-pub async fn wifi(spawner: Spawner, timer: Timer<'static>, wifi: WIFI, r: RNG, radio: RADIO_CLK) {
+pub async fn wifi(
+    spawner: Spawner,
+    timer: Timer<'static>,
+    wifi: WIFI<'static>,
+    r: RNG<'static>,
+    radio: RADIO_CLK<'static>,
+) {
     let mut rng = Rng::new(r);
 
     let esp_wifi_ctrl = &*mk_static!(
@@ -48,6 +54,7 @@ pub async fn wifi(spawner: Spawner, timer: Timer<'static>, wifi: WIFI, r: RNG, r
     let (mut controller, interfaces) = esp_wifi::wifi::new(&esp_wifi_ctrl, wifi).unwrap();
 
     let wifi_interface = interfaces.sta;
+    let sniffer = interfaces.sniffer;
 
     let config = embassy_net::Config::dhcpv4(Default::default());
 
@@ -74,17 +81,15 @@ pub async fn wifi(spawner: Spawner, timer: Timer<'static>, wifi: WIFI, r: RNG, r
     info!("got here");
 
     spawner.spawn(scan_loop(controller)).unwrap();
-    spawner.spawn(sniffer_loop(controller, interfaces));
-
+    spawner.spawn(sniffer_loop(sniffer)).unwrap();
 }
-
 
 #[embassy_executor::task]
 async fn scan_loop(mut controller: WifiController<'static>) {
-    let mut map: HashMap<String<32>, u8> = HashMap::with_capacity(HASHMAP_SIZE);
+    let mut map: HashMap<String, u8> = HashMap::with_capacity(HASHMAP_SIZE);
     loop {
-        let (results, count) = controller.scan_n(VEC_SIZE).unwrap();
-        info!("Found {} networks", count);
+        let results = controller.scan_n(VEC_SIZE).unwrap();
+        info!("Found {} networks", results.len());
 
         for item in &results {
             map.entry(item.ssid.clone()).or_insert(0);
@@ -94,26 +99,23 @@ async fn scan_loop(mut controller: WifiController<'static>) {
     }
 }
 
-// #[embassy_executor::task]
-// async fn sniffer_loop(mut controller: WifiController<'static>, interfaces:Interfaces<'static>) {
-//     let mut sniffer = interfaces.sniffer;
-//     sniffer.set_promiscuous_mode(true).unwrap();
-//     sniffer.set_receive_cb(|packet| {
-//         let _ = match_frames! {
-//             packet.data,
-//             beacon = BeaconFrame => {
-//                 let Some(ssid) = beacon.ssid() else {
-//                     return;
-//                 };
-//                 if critical_section::with(|cs| {
-//                     KNOWN_SSIDS.borrow_ref_mut(cs).insert(ssid.to_string())
-//                 }) {
-//                     println!("Found new AP with SSID: {ssid}");
-//                 }
-//             }
-//         };
-//     });
-// }
+fn parse_wifi_packet(data: &[u8]) -> Result<(String, String), ParseError> {
+    let address1: Vec<String> = data[4..8].iter().map(|&x| x.to_string()).collect();
+    let address2: Vec<String> = data[9..13].iter().map(|&x| x.to_string()).collect();
+
+
+    return Ok((address1.join("."), address2.join(".")));
+}
+
+#[embassy_executor::task]
+async fn sniffer_loop(mut sniffer: Sniffer) {
+    sniffer.set_promiscuous_mode(true).unwrap();
+    sniffer.set_receive_cb(|packet| {
+        let data = packet.data;
+        let (adr1, adr2) = parse_wifi_packet(data).unwrap();
+        info!("MAC: {} → {} )", adr1.as_str(), adr2.as_str());
+    });
+}
 
 #[embassy_executor::task]
 async fn net_task(mut runner: Runner<'static, WifiDevice<'static>>) {

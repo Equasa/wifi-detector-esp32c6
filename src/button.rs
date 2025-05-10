@@ -1,11 +1,12 @@
 use defmt::info;
 use embassy_time::{Duration, Timer};
-use esp_hal::gpio::{GpioPin, Input, InputConfig, Pull};
+use esp_hal::gpio::{Input, InputConfig, Pull};
+use esp_hal::peripherals::GPIO20;
 
 use crate::BUTTON_PRESS;
 
 #[embassy_executor::task]
-pub async fn button(but_pin: GpioPin<20>) {
+pub async fn button(but_pin: GPIO20<'static>) {
     let mut button = Input::new(but_pin, InputConfig::default().with_pull(Pull::Up));
 
     loop {

@@ -1,6 +1,6 @@
 use embedded_graphics::mono_font::ascii::FONT_4X6;
-use esp_hal::gpio::GpioPin;
 use esp_hal::peripherals::I2C0;
+use esp_hal::peripherals::{GPIO21, GPIO22};
 use esp_hal::time::Rate;
 use panic_rtt_target as _;
 
@@ -16,7 +16,7 @@ use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 use crate::{BUTTON_PRESS, DISPLAY_VALUE};
 
 #[embassy_executor::task]
-pub async fn display(sda: GpioPin<21>, scl: GpioPin<22>, i2c: I2C0) {
+pub async fn display(sda: GPIO21<'static>, scl: GPIO22<'static>, i2c: I2C0<'static>) {
     let i2c = I2c::new(i2c, Config::default().with_frequency(Rate::from_khz(400)))
         .unwrap()
         .with_sda(sda)
