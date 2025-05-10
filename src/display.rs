@@ -1,6 +1,5 @@
 use alloc::string::ToString;
-use embedded_graphics::mono_font::ascii::{FONT_4X6, FONT_6X13, FONT_7X13};
-use embedded_graphics::mono_font::iso_8859_1::FONT_10X20;
+use embedded_graphics::mono_font::ascii::{FONT_4X6, FONT_6X13};
 use esp_hal::peripherals::I2C0;
 use esp_hal::peripherals::{GPIO21, GPIO22};
 use esp_hal::time::Rate;
@@ -58,9 +57,14 @@ pub async fn display(sda: GPIO21<'static>, scl: GPIO22<'static>, i2c: I2C0<'stat
         Text::with_baseline(&name, Point::new(0, 0), text_style, Baseline::Top)
             .draw(&mut display)
             .unwrap();
-        Text::with_baseline(&count.to_string(), Point::new(0, 10), text_style, Baseline::Top)
-            .draw(&mut display)
-            .unwrap();
+        Text::with_baseline(
+            &count.to_string(),
+            Point::new(0, 10),
+            text_style,
+            Baseline::Top,
+        )
+        .draw(&mut display)
+        .unwrap();
         display.flush().unwrap();
     }
 }

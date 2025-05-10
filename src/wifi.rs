@@ -18,12 +18,11 @@ use esp_wifi::{init, wifi::WifiDevice, EspWifiController};
 
 use alloc::string::ToString;
 
-use crate::MAC_ADRESSES;
 use crate::PKT_SENDER;
 use crate::SSID_MAC;
 
 const VEC_SIZE: usize = 16;
-const BROADCAST_MAC: &str = "255.255.255.255.255.255";
+const BROADCAST_MAC: &[u8] = &[255,255,255,255,255,255];
 
 macro_rules! mk_static {
     ($t:ty,$val:expr) => {{
@@ -82,11 +81,6 @@ pub async fn wifi(
     spawner.spawn(sniffer_loop(sniffer)).unwrap();
 }
 
-fn parse_bssid(data: &[u8]) -> String {
-    let address1: Vec<String> = data.iter().map(|&x| x.to_string()).collect();
-    return address1.join(".");
-}
-
 #[embassy_executor::task]
 async fn scan_loop(mut controller: WifiController<'static>) {
     loop {
@@ -95,18 +89,15 @@ async fn scan_loop(mut controller: WifiController<'static>) {
 
         for item in &results {
             SSID_MAC
-                .send((item.ssid.clone(), parse_bssid(&item.bssid)))
+                .send((item.ssid.clone(), item.bssid))
                 .await;
         }
         Timer2::after(Duration::from_millis(4_000)).await;
     }
 }
 
-fn parse_wifi_packet(data: &[u8]) -> Result<(String, String), ParseError> {
-    let address1: Vec<String> = data[4..10].iter().map(|&x| x.to_string()).collect();
-    let address2: Vec<String> = data[10..17].iter().map(|&x| x.to_string()).collect();
-
-    return Ok((address1.join("."), address2.join(".")));
+fn parse_wifi_packet(data: &[u8]) -> ([u8;6], [u8;6]){
+    return (data[4..10].try_into().expect(""), data[10..16].try_into().expect(""));
 }
 
 #[embassy_executor::task]
@@ -114,7 +105,8 @@ async fn sniffer_loop(mut sniffer: Sniffer) {
     sniffer.set_promiscuous_mode(true).unwrap();
 
     sniffer.set_receive_cb(|pkt| {
-        let Ok((adr1, adr2)) = parse_wifi_packet(pkt.data);
+
+        let (adr1, adr2) = parse_wifi_packet(pkt.data);
 
         if !adr1.eq(BROADCAST_MAC) {
             let _ = PKT_SENDER.try_send((adr2, adr1));

@@ -2,12 +2,10 @@
 #![no_main]
 
 use alloc::string::String;
-use controller::handle_addresses;
 use defmt::info;
 use esp_hal::clock::CpuClock;
 use esp_hal::timer::systimer::SystemTimer;
 use esp_hal::timer::timg::TimerGroup;
-use esp_wifi::wifi::PromiscuousPkt;
 use panic_rtt_target as _;
 
 use embassy_executor::Spawner;
@@ -21,15 +19,15 @@ mod controller;
 mod display;
 mod wifi;
 
-static DISPLAY_VALUE: Channel<CriticalSectionRawMutex, (String,u8), 1> = Channel::new();
+static DISPLAY_VALUE: Channel<CriticalSectionRawMutex, (String, u8), 1> = Channel::new();
 
 static MAC_ADRESSES: Channel<CriticalSectionRawMutex, (String, String), 1> = Channel::new();
 
 static BUTTON_PRESS: Channel<CriticalSectionRawMutex, u8, 1> = Channel::new();
 
-static PKT_SENDER: Channel<CriticalSectionRawMutex, (String, String), 10> = Channel::new();
+static PKT_SENDER: Channel<CriticalSectionRawMutex, ([u8;6], [u8;6]), 10> = Channel::new();
 
-static SSID_MAC: Channel<CriticalSectionRawMutex, (String, String), 1> = Channel::new();
+static SSID_MAC: Channel<CriticalSectionRawMutex, (String, [u8; 6]), 1> = Channel::new();
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
