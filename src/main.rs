@@ -62,7 +62,9 @@ async fn main(spawner: Spawner) {
 
     spawner.spawn(button::button(button_pin)).unwrap();
 
-    spawner.spawn(controller::handle_addresses()).unwrap();
+    // spawner.spawn(controller::handle_addresses()).unwrap();
 
-    spawner.spawn(controller::handle_name()).unwrap();
+    // spawner.spawn(controller::handle_name()).unwrap();
+
+    spawner.spawn(controller::handle_data()).unwrap();
 }

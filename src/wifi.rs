@@ -57,9 +57,7 @@ pub async fn wifi(
         mk_static!(StackResources<3>, StackResources::<3>::new()),
         seed,
     );
-    controller
-        .set_mode(esp_wifi::wifi::WifiMode::Sta)
-        .unwrap();
+    controller.set_mode(esp_wifi::wifi::WifiMode::Sta).unwrap();
 
     spawner.spawn(net_task(runner)).ok();
 
