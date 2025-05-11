@@ -14,7 +14,7 @@ use embedded_graphics::{
 use esp_hal::i2c::master::{Config, I2c};
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 
-use crate::{BUTTON_PRESS, DISPLAY_VALUE};
+use crate::{DISPLAY_VALUE};
 
 #[embassy_executor::task]
 pub async fn display(sda: GPIO21<'static>, scl: GPIO22<'static>, i2c: I2C0<'static>) {
@@ -49,7 +49,6 @@ pub async fn display(sda: GPIO21<'static>, scl: GPIO22<'static>, i2c: I2C0<'stat
     display.flush().unwrap();
 
     loop {
-        // BUTTON_PRESS.receive().await;
         let (name, count) = DISPLAY_VALUE.receive().await;
 
         display.clear(BinaryColor::Off).unwrap();

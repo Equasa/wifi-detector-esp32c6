@@ -68,5 +68,6 @@ async fn main(spawner: Spawner) {
 
     spawner.spawn(controller::ssid_count_pairer()).unwrap();
 
-    //spawner.spawn(controller::handle_data()).unwrap();
+    spawner.spawn(controller::browse_networks()).unwrap();
+
 }
